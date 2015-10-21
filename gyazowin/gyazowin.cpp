@@ -6,7 +6,7 @@
 
 // グローバル変数:
 HINSTANCE hInst;							// 現在のインターフェイス
-TCHAR *szTitle			= _T("Gyazo");		// タイトル バーのテキスト
+TCHAR *szTitle			= _T("mvGyazo");		// タイトル バーのテキスト
 TCHAR *szWindowClass	= _T("GYAZOWIN");	// メイン ウィンドウ クラス名
 TCHAR *szWindowClassL	= _T("GYAZOWINL");	// レイヤー ウィンドウ クラス名
 HWND hLayerWnd;
@@ -28,8 +28,6 @@ VOID				setClipBoardText(const char* str);
 BOOL				convertPNG(LPCTSTR destFile, LPCTSTR srcFile);
 BOOL				savePNG(LPCTSTR fileName, HBITMAP newBMP);
 BOOL				uploadFile(HWND hwnd, LPCTSTR fileName);
-std::string			getId();
-BOOL				saveId(const WCHAR* str);
 
 // エントリーポイント
 int APIENTRY _tWinMain(HINSTANCE hInstance,
@@ -705,94 +703,11 @@ VOID execUrl(const char* str)
 	free(wcUrl);
 }
 
-// ID を生成・ロードする
-std::string getId()
-{
-
-    TCHAR idFile[_MAX_PATH];
-	TCHAR idDir[_MAX_PATH];
-
-    SHGetSpecialFolderPath( NULL, idFile, CSIDL_APPDATA, FALSE );
-
-	 _tcscat_s( idFile, _T("\\Gyazo"));
-	 _tcscpy_s( idDir, idFile);
-	 _tcscat_s( idFile, _T("\\id.txt"));
-
-	const TCHAR*	 idOldFile			= _T("id.txt");
-	BOOL oldFileExist = FALSE;
-
-	std::string idStr;
-
-	// まずはファイルから ID をロード
-	std::ifstream ifs;
-
-	ifs.open(idFile);
-	if (! ifs.fail()) {
-		// ID を読み込む
-		ifs >> idStr;
-		ifs.close();
-	} else{		
-		std::ifstream ifsold;
-		ifsold.open(idOldFile);
-		if (! ifsold.fail()) {
-			// 同一ディレクトリからID を読み込む(旧バージョンとの互換性)
-			ifsold >> idStr;
-			ifsold.close();
-		}
-	}
-
-	return idStr;
-}
-
-// Save ID
-BOOL saveId(const WCHAR* str)
-{
-
-    TCHAR idFile[_MAX_PATH];
-	TCHAR idDir[_MAX_PATH];
-
-    SHGetSpecialFolderPath( NULL, idFile, CSIDL_APPDATA, FALSE );
-
-	 _tcscat_s( idFile, _T("\\Gyazo"));
-	 _tcscpy_s( idDir, idFile);
-	 _tcscat_s( idFile, _T("\\id.txt"));
-
-	const TCHAR*	 idOldFile			= _T("id.txt");
-
-	size_t  slen;
-	size_t  dcount;
-	slen  = _tcslen(str) + 1; // NULL
-
-	char *idStr = (char *)malloc(slen * sizeof(char));
-	// バイト文字に変換
-	wcstombs_s(&dcount, idStr, slen, str, slen);
-
-	// ID を保存する
-	CreateDirectory(idDir,NULL);
-	std::ofstream ofs;
-	ofs.open(idFile);
-	if (! ofs.fail()) {
-		ofs << idStr;
-		ofs.close();
-
-		// 旧設定ファイルの削除
-		if (PathFileExists(idOldFile)){
-			DeleteFile(idOldFile);
-		}
-	}else{
-		free(idStr);
-		return FALSE;
-	}
-
-	free(idStr);
-	return TRUE;
-}
-
 // PNG ファイルをアップロードする.
 BOOL uploadFile(HWND hwnd, LPCTSTR fileName)
 {
-	const TCHAR* UPLOAD_SERVER	= _T("upload.gyazo.com");
-	const TCHAR* UPLOAD_PATH	= _T("/upload.cgi");
+	const TCHAR* UPLOAD_SERVER	= _T("utils.michaelv.co");
+	const TCHAR* UPLOAD_PATH	= _T("/img/");
 
 	const char*  sBoundary = "----BOUNDARYBOUNDARY----";		// boundary
 	const char   sCrLf[]   = { 0xd, 0xa, 0x0 };					// 改行(CR+LF)
@@ -800,27 +715,12 @@ BOOL uploadFile(HWND hwnd, LPCTSTR fileName)
 		_T("Content-type: multipart/form-data; boundary=----BOUNDARYBOUNDARY----");
 
 	std::ostringstream	buf;	// 送信メッセージ
-	std::string			idStr;	// ID
-	
-	// ID を取得
-	idStr = getId();
-
-	// メッセージの構成
-	// -- "id" part
-	buf << "--";
-	buf << sBoundary;
-	buf << sCrLf;
-	buf << "content-disposition: form-data; name=\"id\"";
-	buf << sCrLf;
-	buf << sCrLf;
-	buf << idStr;
-	buf << sCrLf;
 
 	// -- "imagedata" part
 	buf << "--";
 	buf << sBoundary;
 	buf << sCrLf;
-	buf << "content-disposition: form-data; name=\"imagedata\"; filename=\"gyazo.com\"";
+	buf << "content-disposition: form-data; name=\"imagedata\"; filename=\"imagedata\"";
 	buf << sCrLf;
 	//buf << "Content-type: image/png";	// 一応
 	//buf << sCrLf;
@@ -877,7 +777,7 @@ BOOL uploadFile(HWND hwnd, LPCTSTR fileName)
 	}
 
 	// User-Agentを指定
-	const TCHAR* ua = _T("User-Agent: Gyazowin/1.0\r\n");
+	const TCHAR* ua = _T("User-Agent: mvGyazowin/1.0.1\r\n");
 	BOOL bResult = HttpAddRequestHeaders(
 		hRequest, ua, _tcslen(ua), 
 		HTTP_ADDREQ_FLAG_ADD | HTTP_ADDREQ_FLAG_REPLACE);
@@ -907,19 +807,6 @@ BOOL uploadFile(HWND hwnd, LPCTSTR fileName)
 				szTitle, MB_ICONERROR | MB_OK);
 		} else {
 			// upload succeeded
-
-			// get new id
-			DWORD idLen = 100;
-			TCHAR newid[100];
-			
-			memset(newid, 0, idLen*sizeof(TCHAR));	
-			_tcscpy_s(newid, _T("X-Gyazo-Id"));
-
-			HttpQueryInfo(hRequest, HTTP_QUERY_CUSTOM, newid, &idLen, 0);
-			if (GetLastError() != ERROR_HTTP_HEADER_NOT_FOUND && idLen != 0) {
-				//save new id
-				saveId(newid);
-			}
 
 			// 結果 (URL) を読取る
 			DWORD len;
